@@ -17,7 +17,11 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, write to the Free Software Foundation,
 #  Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+import decimal
 import json
+import pickle
+import uuid
+import datetime
 import requests
 
 import iris_interface.IrisInterfaceStatus as InterfaceStatus
@@ -84,6 +88,8 @@ class IrisWebHooksInterface(IrisModuleInterface):
 
                 if hook.get('active') is False:
                     self.log.info(f'Web hook {hook.get("name")} is not active, skipping')
+                    if 'on_manual_trigger' in iris_hook:
+                        self.deregister_from_hook(module_id=module_id, iris_hook_name=iris_hook)
                     continue
 
                 if iris_hook in ['all', 'all_update', 'all_create', 'all_delete']:
@@ -109,19 +115,37 @@ class IrisWebHooksInterface(IrisModuleInterface):
                         else:
                             hooks.append(inhook)
 
-                if 'on_postload' not in iris_hook:
+                if 'on_postload' not in iris_hook and 'on_manual_trigger' not in iris_hook:
                     self.log.warning(f'{iris_hook} is not supported by this module')
                     continue
 
-                self.log.info(f'Registering to {iris_hook}')
-                status = self.register_to_hook(module_id, iris_hook_name=iris_hook)
+                if 'on_manual_trigger' in iris_hook:
+                    # Check that we have a manual trigger name
+                    if not hook.get('manual_trigger_name'):
+                        self.log.warning(f'No manual trigger name for {iris_hook}. Please set manual_trigger_name.')
+                        continue
 
-                if status.is_failure():
-                    self.log.error(status.get_message())
-                    self.log.error(status.get_data())
+                    manual_trigger_name = hook.get('manual_trigger_name')
+                    self.log.info(f'Registering to manual hook {iris_hook}')
+                    status = self.register_to_hook(module_id, iris_hook_name=iris_hook,
+                                                   manual_hook_name=manual_trigger_name)
+
+                    if status.is_failure():
+                        self.log.error(status.get_message())
+                        self.log.error(status.get_data())
+                    else:
+                        hooks.append(iris_hook)
 
                 else:
-                    hooks.append(iris_hook)
+                    self.log.info(f'Registering to {iris_hook}')
+                    status = self.register_to_hook(module_id, iris_hook_name=iris_hook)
+
+                    if status.is_failure():
+                        self.log.error(status.get_message())
+                        self.log.error(status.get_data())
+
+                    else:
+                        hooks.append(iris_hook)
 
         self.log.info('Successfully registered to hooks {hooks}'.format(hooks=','.join(set(hooks))))
 
@@ -213,20 +237,29 @@ class IrisWebHooksInterface(IrisModuleInterface):
         hook_type = hook_split[-1]
         hook_object = '_'.join(hook_split[2:-1])
 
+        if 'on_manual_trigger' in hook_name:
+            hook_object = '_'.join(hook_split[3:])
+
         user_name = 'N/A'
         object_name = 'N/A'
         case_name = 'N/A'
         case_id = None
         object_url = None
         case_info = ""
+        raw_data = {}
 
         request_rendering = hook.get('request_rendering')
+        use_rendering = hook.get('use_rendering')
 
         if hook_object == 'case':
             user_name = data[0].user.name
             object_name = data[0].name
             object_url = f"{server_url}/case?cid={data[0].case_id}"
             case_name = data[0].name
+            raw_data = {
+                'case': data[0].__dict__,
+                'object_url': object_url
+            }
 
         elif hook_object == 'asset':
             user_name = data[0].user.name
@@ -234,6 +267,10 @@ class IrisWebHooksInterface(IrisModuleInterface):
             case_id = data[0].case_id
             object_url = f"{server_url}/case/assets?cid={case_id}&shared={data[0].asset_id}"
             case_name = data[0].case.name
+            raw_data = {
+                'asset': data[0].__dict__,
+                'object_url': object_url
+            }
 
         elif hook_object == 'note':
             user_name = data[0].user.name
@@ -241,10 +278,18 @@ class IrisWebHooksInterface(IrisModuleInterface):
             case_id = data[0].note_case_id
             object_url = f"{server_url}/case/notes?cid={case_id}&shared={data[0].note_id}"
             case_name = data[0].case.name
+            raw_data = {
+                'note': data[0].__dict__,
+                'object_url': object_url
+            }
 
         elif hook_object == 'ioc':
             user_name = data[0].user.name
             object_name = data[0].ioc_value
+            raw_data = {
+                'ioc': data[0].__dict__,
+                'object_url': object_url
+            }
 
         elif hook_object == 'event':
             user_name = data[0].user.name
@@ -252,6 +297,10 @@ class IrisWebHooksInterface(IrisModuleInterface):
             case_name = data[0].case.name
             case_id = data[0].case_id
             object_url = f"{server_url}/case/timeline?cid={case_id}&shared={data[0].event_id}"
+            raw_data = {
+                'event': data[0].__dict__,
+                'object_url': object_url
+            }
 
         elif hook_object == 'evidence':
             user_name = data[0].user.name
@@ -259,6 +308,10 @@ class IrisWebHooksInterface(IrisModuleInterface):
             case_name = data[0].case.name
             case_id = data[0].case_id
             object_url = f"{server_url}/case/evidences?cid={case_id}&shared={data[0].id}"
+            raw_data = {
+                'evidence': data[0].__dict__,
+                'object_url': object_url
+            }
 
         elif hook_object == 'task' or hook_object == 'global_task':
             user_name = data[0].user_update.name
@@ -266,6 +319,17 @@ class IrisWebHooksInterface(IrisModuleInterface):
             case_name = data[0].case.name
             case_id = data[0].task_case_id
             object_url = f"{server_url}/case/task?cid={case_id}&shared={data[0].id}"
+            raw_data = {
+                'task': data[0].__dict__,
+                'object_url': object_url
+            }
+
+        elif hook_object == 'alert':
+            object_url = f"{server_url}/alerts/filter?alert_ids={data[0].alert_id}"
+            raw_data = {
+                'alert': data[0].__dict__,
+                'object_url': object_url
+            }
 
         elif hook_object == 'report':
             object_name = 'a report'
@@ -277,23 +341,32 @@ class IrisWebHooksInterface(IrisModuleInterface):
             case_info = "on case {rendered_url}".format(rendered_url=self._render_url(f"{server_url}/case?cid={case_id}",
                                                                                       f"#{case_id}", request_rendering))
 
+        raw_data['object_url'] = object_url
+
         description = f"{user_name} {hook_type}d {hook_object} {object_name} {case_info}"
         title = f"[{case_name}] {hook_object.capitalize()} {hook_type}d"
 
         try:
-            request_content = json.dumps(hook.get('request_body'))
+            request_content = json.dumps(hook.get('request_body'), cls=AlchemyEncoder)
         except Exception as e:
             self.log.error(str(e))
             return
 
-        request_content = request_content.replace('%TITLE%', title)
-        request_content = request_content.replace('%DESCRIPTION%', description)
+        if use_rendering:
+            request_content = request_content.replace('%TITLE%', title)
+            request_content = request_content.replace('%DESCRIPTION%', description)
+            try:
+                request_data = json.loads(request_content)
+            except Exception as e:
+                self.log.error('Encountered error running hook.')
+                self.log.error(str(e))
+                return
 
-        try:
-            request_data = json.loads(request_content)
-        except Exception as e:
-            self.log.error(str(e))
-            return
+        else:
+
+            request_data = self.map_request_content(hook.get('request_body'), raw_data)
+            req = json.dumps(request_data, cls=AlchemyEncoder)
+            request_data = json.loads(req)
 
         url = hook.get('request_url')
 
@@ -305,6 +378,32 @@ class IrisWebHooksInterface(IrisModuleInterface):
             self.log.error(err)
         else:
             self.log.info(f"Webhook {hook.get('name')} - Payload delivered successfully, code {result.status_code}.")
+
+    def get_nested(self, data, key_list):
+        if key_list:
+            element = key_list.pop(0)
+            if element in data:
+                return self.get_nested(data[element], key_list)
+            else:
+                return None  # return None if key is not found
+
+        return data
+
+    def map_request_content(self, request_content, data):
+
+        result = {}
+
+        for key, value in request_content.items():
+            # split the value into object and property
+            keys = value.split('.')
+
+            nested_value = self.get_nested(data, keys)
+            if nested_value is not None:
+                result[key] = nested_value
+            else:
+                result[key] = ""
+
+        return result
 
     def _render_url(self, url, link, rendering_format):
         """
@@ -349,3 +448,29 @@ class IrisWebHooksInterface(IrisModuleInterface):
                 return False
 
         return True
+
+
+class AlchemyEncoder(json.JSONEncoder):
+
+    def default(self, obj):
+
+        if isinstance(obj, decimal.Decimal):
+            return str(obj)
+
+        if isinstance(obj, datetime.datetime) or isinstance(obj, datetime.date):
+            return obj.isoformat()
+
+        if isinstance(obj, uuid.UUID):
+            return str(obj)
+
+        else:
+            if obj.__class__ == bytes:
+                try:
+                    return pickle.load(obj)
+                except Exception:
+                    return str(obj)
+
+        try:
+            return json.JSONEncoder.default(self, obj)
+        except Exception:
+            return str(obj)
