@@ -217,8 +217,13 @@ class IrisWebHooksInterface(IrisModuleInterface):
                         self._do_web_hook(hook_name, data, hook, server_url)
 
                 elif iris_hook == hook_name:
-
-                    self._do_web_hook(hook_name, data, hook, server_url)
+                    if hook_name.beginswith('on_manual_trigger'):
+                        if hook.get('manual_trigger_name') == hook_ui_name:
+                            self._do_web_hook(hook_name, data, hook, server_url)
+                        else:
+                            continue
+                    else:
+                        self._do_web_hook(hook_name, data, hook, server_url)
 
         return in_status(data=data)
 
