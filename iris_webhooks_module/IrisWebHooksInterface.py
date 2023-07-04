@@ -240,7 +240,7 @@ class IrisWebHooksInterface(IrisModuleInterface):
 
         hook_split = hook_name.split('_')
         hook_type = hook_split[-1]
-        hook_object = '_'.join(hook_split[2:-1])
+        hook_object = '_'.join(hook_split[2:3])
 
         if 'on_manual_trigger' in hook_name:
             hook_object = '_'.join(hook_split[3:])
@@ -350,6 +350,8 @@ class IrisWebHooksInterface(IrisModuleInterface):
 
         description = f"{user_name} {hook_type}d {hook_object} {object_name} {case_info}"
         title = f"[{case_name}] {hook_object.capitalize()} {hook_type}d"
+
+        print(raw_data)
 
         try:
             request_content = json.dumps(hook.get('request_body'), cls=AlchemyEncoder)
