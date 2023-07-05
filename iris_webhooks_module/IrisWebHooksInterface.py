@@ -27,7 +27,7 @@ import requests
 import iris_interface.IrisInterfaceStatus as InterfaceStatus
 from iris_interface.IrisModuleInterface import IrisModuleInterface, IrisModuleTypes
 from app.datamgmt.iris_engine.modules_db import module_list_available_hooks
-
+from app.schema.marshables import AlertSchema, CaseDetailsSchema, CaseAssetsSchema, CaseNoteSchema, IocSchema, EventSchema, CaseEvidenceSchema, CaseTaskSchema
 import iris_webhooks_module.IrisWebHooksConfig as interface_conf
 
 
@@ -262,7 +262,7 @@ class IrisWebHooksInterface(IrisModuleInterface):
             object_url = f"{server_url}/case?cid={data[0].case_id}"
             case_name = data[0].name
             raw_data = {
-                'case': data[0].__dict__,
+                'cases': CaseDetailsSchema(many=True).dump(data),
                 'object_url': object_url
             }
 
@@ -273,7 +273,7 @@ class IrisWebHooksInterface(IrisModuleInterface):
             object_url = f"{server_url}/case/assets?cid={case_id}&shared={data[0].asset_id}"
             case_name = data[0].case.name
             raw_data = {
-                'asset': data[0].__dict__,
+                'assets': CaseAssetsSchema(many=True).dump(data),
                 'object_url': object_url
             }
 
@@ -284,7 +284,7 @@ class IrisWebHooksInterface(IrisModuleInterface):
             object_url = f"{server_url}/case/notes?cid={case_id}&shared={data[0].note_id}"
             case_name = data[0].case.name
             raw_data = {
-                'note': data[0].__dict__,
+                'notes': CaseNoteSchema(many=True).dump(data),
                 'object_url': object_url
             }
 
@@ -292,7 +292,7 @@ class IrisWebHooksInterface(IrisModuleInterface):
             user_name = data[0].user.name if data[0].user else 'N/A'
             object_name = data[0].ioc_value
             raw_data = {
-                'ioc': data[0].__dict__,
+                'iocs': IocSchema(many=True).dump(data),
                 'object_url': object_url
             }
 
@@ -303,7 +303,7 @@ class IrisWebHooksInterface(IrisModuleInterface):
             case_id = data[0].case_id
             object_url = f"{server_url}/case/timeline?cid={case_id}&shared={data[0].event_id}"
             raw_data = {
-                'event': data[0].__dict__,
+                'events': EventSchema(many=True).dump(data),
                 'object_url': object_url
             }
 
@@ -314,7 +314,7 @@ class IrisWebHooksInterface(IrisModuleInterface):
             case_id = data[0].case_id
             object_url = f"{server_url}/case/evidences?cid={case_id}&shared={data[0].id}"
             raw_data = {
-                'evidence': data[0].__dict__,
+                'evidences': CaseEvidenceSchema(many=True).dump(data),
                 'object_url': object_url
             }
 
@@ -325,14 +325,14 @@ class IrisWebHooksInterface(IrisModuleInterface):
             case_id = data[0].task_case_id
             object_url = f"{server_url}/case/task?cid={case_id}&shared={data[0].id}"
             raw_data = {
-                'task': data[0].__dict__,
+                'tasks': CaseTaskSchema(many=True).dump(data),
                 'object_url': object_url
             }
 
         elif hook_object == 'alert':
             object_url = f"{server_url}/alerts/filter?alert_ids={data[0].alert_id}"
             raw_data = {
-                'alert': data[0].__dict__,
+                'alerts': AlertSchema(many=True).dump(data),
                 'object_url': object_url
             }
 
@@ -350,8 +350,6 @@ class IrisWebHooksInterface(IrisModuleInterface):
 
         description = f"{user_name} {hook_type}d {hook_object} {object_name} {case_info}"
         title = f"[{case_name}] {hook_object.capitalize()} {hook_type}d"
-
-        print(raw_data)
 
         try:
             request_content = json.dumps(hook.get('request_body'), cls=AlchemyEncoder)
