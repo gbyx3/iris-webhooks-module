@@ -374,13 +374,16 @@ class IrisWebHooksInterface(IrisModuleInterface):
             request_data = json.loads(req)
 
         url = hook.get('request_url')
+        verify_ssl = hook.get('verify_ssl') if hook.get('verify_ssl') is not None else True
 
-        result = requests.post(url, json=request_data)
+        result = requests.post(url, json=request_data, verify=verify_ssl)
 
         try:
             result.raise_for_status()
         except requests.exceptions.HTTPError as err:
             self.log.error(err)
+            self.log.error(result.text)
+            self.log.error(request_data)
         else:
             self.log.info(f"Webhook {hook.get('name')} - Payload delivered successfully, code {result.status_code}.")
 
