@@ -256,8 +256,13 @@ class IrisWebHooksInterface(IrisModuleInterface):
         request_rendering = hook.get('request_rendering')
         use_rendering = hook.get('use_rendering')
 
+        # Get the username if it exists. Check if data[0] contains user first
+        if getattr(data[0], 'user', None):
+            user_name = data[0].user.name
+        elif getattr(data[0], 'user_update', None):
+            user_name = data[0].user_update.name
+
         if hook_object == 'case':
-            user_name = data[0].user.name if data[0].user else 'N/A'
             object_name = data[0].name
             object_url = f"{server_url}/case?cid={data[0].case_id}"
             case_name = data[0].name
@@ -267,7 +272,6 @@ class IrisWebHooksInterface(IrisModuleInterface):
             }
 
         elif hook_object == 'asset':
-            user_name = data[0].user.name if data[0].user else 'N/A'
             object_name = data[0].asset_name
             case_id = data[0].case_id
             object_url = f"{server_url}/case/assets?cid={case_id}&shared={data[0].asset_id}"
@@ -278,7 +282,6 @@ class IrisWebHooksInterface(IrisModuleInterface):
             }
 
         elif hook_object == 'note':
-            user_name = data[0].user.name if data[0].user else 'N/A'
             object_name = data[0].note_title
             case_id = data[0].note_case_id
             object_url = f"{server_url}/case/notes?cid={case_id}&shared={data[0].note_id}"
@@ -289,7 +292,6 @@ class IrisWebHooksInterface(IrisModuleInterface):
             }
 
         elif hook_object == 'ioc':
-            user_name = data[0].user.name if data[0].user else 'N/A'
             object_name = data[0].ioc_value
             raw_data = {
                 'iocs': IocSchema(many=True).dump(data),
@@ -297,7 +299,6 @@ class IrisWebHooksInterface(IrisModuleInterface):
             }
 
         elif hook_object == 'event':
-            user_name = data[0].user.name if data[0].user else 'N/A'
             object_name = data[0].event_title
             case_name = data[0].case.name
             case_id = data[0].case_id
@@ -308,7 +309,6 @@ class IrisWebHooksInterface(IrisModuleInterface):
             }
 
         elif hook_object == 'evidence':
-            user_name = data[0].user.name if data[0].user else 'N/A'
             object_name = data[0].filename
             case_name = data[0].case.name
             case_id = data[0].case_id
@@ -319,7 +319,6 @@ class IrisWebHooksInterface(IrisModuleInterface):
             }
 
         elif hook_object == 'task' or hook_object == 'global_task':
-            user_name = data[0].user_update.name if data[0].user_update else 'N/A'
             object_name = data[0].task_title
             case_name = data[0].case.name
             case_id = data[0].task_case_id
