@@ -323,7 +323,7 @@ class IrisWebHooksInterface(IrisModuleInterface):
             object_name = data[0].task_title
             case_name = data[0].case.name
             case_id = data[0].task_case_id
-            object_url = f"{server_url}/case/task?cid={case_id}&shared={data[0].id}"
+            object_url = f"{server_url}/case/tasks?cid={case_id}&shared={data[0].id}"
             raw_data = {
                 'tasks': CaseTaskSchema(many=True).dump(data),
                 'object_url': object_url
