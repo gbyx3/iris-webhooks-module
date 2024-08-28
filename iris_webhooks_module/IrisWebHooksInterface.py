@@ -459,7 +459,6 @@ class IrisWebHooksInterface(IrisModuleInterface):
                     nested_value = self.get_nested(data, keys)
                     result[key] = nested_value if nested_value is not None else ""
 
-        print("Result:", result)
         return result
 
     def _render_url(self, url, link, rendering_format):
