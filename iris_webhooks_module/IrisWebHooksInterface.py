@@ -22,7 +22,10 @@ import json
 import pickle
 import uuid
 import datetime
+from string import Template
+
 import requests
+import re
 
 import iris_interface.IrisInterfaceStatus as InterfaceStatus
 from iris_interface.IrisModuleInterface import IrisModuleInterface, IrisModuleTypes
@@ -391,28 +394,74 @@ class IrisWebHooksInterface(IrisModuleInterface):
             self.log.info(f"Webhook {hook.get('name')} - Payload delivered successfully, code {result.status_code}.")
 
     def get_nested(self, data, key_list):
-        if key_list:
-            element = key_list.pop(0)
-            if element in data:
-                return self.get_nested(data[element], key_list)
-            else:
-                return None  # return None if key is not found
+        if not key_list:
+            return data
 
-        return data
+        element = key_list.pop(0)
+
+        if isinstance(data, list):
+            return [self.get_nested(item, key_list.copy()) for item in data]
+
+        if isinstance(data, dict) and element in data:
+            return self.get_nested(data[element], key_list)
+        else:
+            return None
+
+    def replace_template_placeholders(self, template_str, data):
+        # get all keys in template
+        keys_in_template = re.findall(r"\${{(.*?)}}", template_str)
+
+        replacements = {}
+        for key in keys_in_template:
+            keys = key.split('.')
+
+            if isinstance(data.get(keys[0]), list):
+                extracted_values = []
+                for cdata in data[keys[0]]:
+                    nested_value = self.get_nested(cdata, keys[1:])
+                    extracted_values.append(nested_value if nested_value is not None else "")
+
+                if len(keys) == 1:
+                    replacements[key] = extracted_values
+                else:
+                    replacements[key] = extracted_values if len(extracted_values) > 1 else extracted_values[0]
+            else:
+                nested_value = self.get_nested(data, keys)
+                replacements[key] = nested_value if nested_value is not None else ""
+
+        for key, value in replacements.items():
+            template_str = template_str.replace(f"${{{{{key}}}}}", str(value))
+        return template_str
 
     def map_request_content(self, request_content, data):
-
         result = {}
 
         for key, value in request_content.items():
-            # split the value into object and property
-            keys = value.split('.')
+            if isinstance(value, str) and '${{' in value:
+                # Handle templated strings
+                result[key] = self.replace_template_placeholders(value, data)
 
-            nested_value = self.get_nested(data, keys)
-            if nested_value is not None:
-                result[key] = nested_value
+            # handle nested values
+            elif isinstance(value, dict):
+                result[key] = self.map_request_content(value, data)
+
             else:
-                result[key] = ""
+                keys = value.split('.')
+
+                if isinstance(data.get(keys[0]), list):
+                    extracted_values = []
+                    for cdata in data[keys[0]]:
+                        nested_value = self.get_nested(cdata, keys[1:])
+                        extracted_values.append(nested_value if nested_value is not None else "")
+
+                    if len(keys) == 1:
+                        result[key] = extracted_values
+                    else:
+                        result[key] = extracted_values if len(extracted_values) > 1 else extracted_values[0]
+
+                else:
+                    nested_value = self.get_nested(data, keys)
+                    result[key] = nested_value if nested_value is not None else ""
 
         return result
 
