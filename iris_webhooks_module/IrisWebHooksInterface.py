@@ -332,7 +332,10 @@ class IrisWebHooksInterface(IrisModuleInterface):
             }
 
         elif hook_object == 'alert':
-            object_url = f"{server_url}/alerts/filter?alert_ids={data[0]['alert_ids']}"
+            if isinstance(data[0], dict):
+                object_url = f"{server_url}/alerts/filter?alert_ids={data[0]['alert_ids']}"
+            else:
+                object_url = f"{server_url}/alerts/filter?alert_ids={data[0].alert_id}"
             raw_data = {
                 'alerts': AlertSchema(many=True).dump(data),
                 'object_url': object_url
