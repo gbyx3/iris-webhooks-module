@@ -255,6 +255,8 @@ class IrisWebHooksInterface(IrisModuleInterface):
         object_url = None
         case_info = ""
         raw_data = {}
+        file_path = ""
+        rfile = ""
 
         request_rendering = hook.get('request_rendering')
         use_rendering = hook.get('use_rendering')
@@ -339,7 +341,12 @@ class IrisWebHooksInterface(IrisModuleInterface):
             }
 
         elif hook_object == 'report':
-            object_name = 'a report'
+            object_name = data[0]['report_id']
+            user_name = data[0]['user_name']
+            case_name = data[0]['report_id']
+            case_id = data[0]['case_id']
+            file_path = data[0]['file_path']
+            rfile = data[0]['file']
 
         if object_url:
             object_name = self._render_url(object_url, object_name, request_rendering)
@@ -362,6 +369,7 @@ class IrisWebHooksInterface(IrisModuleInterface):
         if use_rendering:
             request_content = request_content.replace('%TITLE%', title)
             request_content = request_content.replace('%DESCRIPTION%', description)
+            request_content = request_content.replace('%FILE%', rfile)
             try:
                 request_data = json.loads(request_content)
             except Exception as e:
