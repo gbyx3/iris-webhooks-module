@@ -387,10 +387,10 @@ class IrisWebHooksInterface(IrisModuleInterface):
             request_data = json.loads(req)
 
         url = hook.get('request_url')
-        request_header = hook.get('request_header') if hook.get('request_header') is not None else {}
+        request_headers = hook.get('request_headers') if hook.get('request_headers') is not None else {}
         verify_ssl = hook.get('verify_ssl') if hook.get('verify_ssl') is not None else True
 
-        result = requests.post(url, json=request_data, headers=request_header, verify=verify_ssl)
+        result = requests.post(url, json=request_data, headers=request_headers, verify=verify_ssl)
 
         try:
             result.raise_for_status()
